@@ -12,6 +12,7 @@ def check_majority(driver):
 
 
 def set_needed_price(driver, min_price, max_price):
+
     min_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[0]
     max_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[1]
     min_price_input.clear()
