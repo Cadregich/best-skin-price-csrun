@@ -61,12 +61,14 @@ items = []
 
 for card in drop_preview_elements:
     price_el = card.find_element(By.CLASS_NAME, 'drop-preview__price')
-    title_el = card.find_element(By.CLASS_NAME, 'drop-preview__subtitle')
+    title_el = card.find_element(By.CLASS_NAME, 'drop-preview__title')
+    subtitle_el = card.find_element(By.CLASS_NAME, 'drop-preview__subtitle')
     desc_el = card.find_element(By.CLASS_NAME, 'drop-preview__desc')
 
     item_data = {
         "price": price_el.text,
         "title": title_el.text,
+        "subtitle": subtitle_el.text,
         "wear": desc_el.text
     }
 
@@ -78,3 +80,33 @@ for card in drop_preview_elements:
     print('_______________________')
 
 driver.quit()
+
+wears = [
+    'Прямо с завода',
+    'Немного поношенное',
+    'После полевых',
+    'Поношенное',
+    'Закалённое в боях'
+]
+
+for item in items:
+    if (
+        item["wear"] not in wears and
+        item["wear"] != '' or
+        item["title"] == 'Engineer SMG'
+    ):
+        print(item["title"], item['subtitle'], 'не из CS:GO')
+        print('\n')
+
+
+
+
+#
+# driver = webdriver.Chrome()
+#
+# driver.get('https://example.com')
+#
+# element = driver.find_element(By.ID, 'some_element_id')
+# element.click()
+#
+# driver.quit()
