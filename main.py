@@ -89,15 +89,20 @@ wears = [
     'Закалённое в боях'
 ]
 
+csgo_items = []
+other_items = []
+
 for item in items:
     if (
         item["wear"] not in wears and
         item["wear"] != '' or
         item["title"] == 'Engineer SMG'
     ):
-        print(item["title"], item['subtitle'], 'не из CS:GO')
-        print('\n')
+        other_items.append(item)
+    else:
+        csgo_items.append(item)
 
+print(other_items)
 
 
 
