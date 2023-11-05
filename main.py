@@ -57,13 +57,24 @@ drop_preview_elements = driver.find_elements(By.CLASS_NAME, 'drop-preview')
 print("Количество товаров:", len(drop_preview_elements))
 print('\n', '_______________________')
 
+items = []
+
 for card in drop_preview_elements:
     price_el = card.find_element(By.CLASS_NAME, 'drop-preview__price')
     title_el = card.find_element(By.CLASS_NAME, 'drop-preview__subtitle')
     desc_el = card.find_element(By.CLASS_NAME, 'drop-preview__desc')
-    print("Цена:", price_el.text)
-    print("Название:", title_el.text)
-    print("Износ:", desc_el.text)
+
+    item_data = {
+        "price": price_el.text,
+        "title": title_el.text,
+        "wear": desc_el.text
+    }
+
+    items.append(item_data)
+
+    print("Цена:", item_data["price"])
+    print("Название:", item_data["title"])
+    print("Износ:", item_data["wear"])
     print('_______________________')
 
 driver.quit()
