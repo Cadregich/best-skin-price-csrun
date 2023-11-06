@@ -5,6 +5,8 @@ from selenium.webdriver.support import expected_conditions as EC
 import os
 import time
 
+import requests
+
 
 def check_majority(driver):
     switch_label = driver.find_element(By.CSS_SELECTOR, 'label.agree-switcher')
@@ -12,7 +14,6 @@ def check_majority(driver):
 
 
 def set_needed_price(driver, min_price, max_price):
-
     min_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[0]
     max_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[1]
     min_price_input.clear()
@@ -89,29 +90,57 @@ wears = [
     'Закалённое в боях'
 ]
 
+englishWears = {
+    'Прямо с завода': 'Factory New',
+    'Немного поношенное': 'Minimal Wear',
+    'После полевых': 'Field-Tested',
+    'Поношенное': 'Well-Worn',
+    'Закалённое в боях': 'Battle-Scarred'
+}
+
 csgo_items = []
 other_items = []
 
 for item in items:
     if (
-        item["wear"] not in wears and
-        item["wear"] != '' or
-        item["title"] == 'Engineer SMG'
+            item["wear"] not in wears and
+            item["wear"] != '' or
+            item["title"] == 'Engineer SMG'
     ):
         other_items.append(item)
     else:
         csgo_items.append(item)
 
-print(other_items)
+print(other_items, '\n')
 
+for item in csgo_items:
+    if item['wear'] in wears:
+        url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
+              f"{item['subtitle']} ({englishWears[item['wear']]})"
+    else:
+        url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
+              f"{item['subtitle']}"
 
-
-#
-# driver = webdriver.Chrome()
-#
-# driver.get('https://example.com')
-#
-# element = driver.find_element(By.ID, 'some_element_id')
-# element.click()
-#
-# driver.quit()
+    while True:
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if data is not None:
+                try:
+                    print(item['title'], '|', item['subtitle'], f'({item["wear"]})' if item['wear'] in wears else '')
+                    print('Цены:', item['price'], '=>', data['lowest_price'], '\n')
+                    break
+                except Exception:
+                    print('Не удалось получить lowest_price для', url, '\n')
+                    break
+            else:
+                print('API вернул null, повторяем через 5 секунд\n')
+                time.sleep(5)
+        elif response.status_code == 429:
+            print(f"Ошибка запроса: {response.status_code} \n {url}")
+            print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
+            time.sleep(60)
+        else:
+            print(f"Ошибка запроса: {response.status_code} \n {url} \n")
+            break
+    time.sleep(0.33)
