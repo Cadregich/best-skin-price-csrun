@@ -34,7 +34,9 @@ def load_all_items(driver):
 
 
 def start_looking_items_in_steam_market(items, items_game):
+    top_prices = {}
     for item in items:
+        key = f"{item['title']} | {item['subtitle']}"
         if items_game == 'csgo':
             if item['wear'] in wears:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
@@ -62,6 +64,24 @@ def start_looking_items_in_steam_market(items, items_game):
                             print(item['title'], '|', item['subtitle'],
                                   f'({item["wear"]})' if item['wear'] in wears else '')
                             print(price_info, '\n')
+
+                            result_string = ""
+
+                            top_prices[key] = difference_in_percents
+
+                            if len(top_prices) > 20:
+                                min_key = min(top_prices, key=top_prices.get)
+                                del top_prices[min_key]
+
+                            sorted_top_prices = sorted(top_prices.items(), key=lambda x: x[1], reverse=True)
+
+                            for item_name, diff in sorted_top_prices:
+                                result_string += f"{item_name} => {diff}% \n"
+
+                            # print(result_string)
+
+                            with open("Log.txt", "w", encoding='utf-8') as file:
+                                file.write(f"{result_string}\n")
                             break
                     except Exception:
                         print('Не удалось получить lowest_price для', url, '\n')
