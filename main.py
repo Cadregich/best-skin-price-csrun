@@ -33,6 +33,52 @@ def load_all_items(driver):
             break
 
 
+def start_looking_items_in_steam_market(items, items_game):
+    for item in items:
+        if items_game == 'csgo':
+            if item['wear'] in wears:
+                url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
+                      f"{item['subtitle']} ({englishWears[item['wear']]})"
+            else:
+                url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
+                      f"{item['subtitle']}"
+        elif items_game == 'dota':
+            url = 'https://steamcommunity.com/market/priceoverview/?appid=570&currency=1' \
+                  f"&market_hash_name={item['title']}"
+        while True:
+            response = requests.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                if data is not None:
+                    try:
+                        run_price = float(item['price'].replace('$', ''))
+                        steam_price = float(data['lowest_price'].replace('$', ''))
+                        difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
+                        price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
+                        if items_game == 'dota':
+                            print(item['title'])
+                            print(price_info, '\n')
+                        elif items_game == 'csgo':
+                            print(item['title'], '|', item['subtitle'],
+                                  f'({item["wear"]})' if item['wear'] in wears else '')
+                            print(price_info, '\n')
+                            break
+                    except Exception:
+                        print('Не удалось получить lowest_price для', url, '\n')
+                        break
+                else:
+                    print('API вернул null, повторяем через 5 секунд\n')
+                    time.sleep(5)
+            elif response.status_code == 429:
+                print(f"Ошибка запроса: {response.status_code} \n {url}")
+                print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
+                time.sleep(60)
+            else:
+                print(f"Ошибка запроса: {response.status_code} \n {url} \n")
+                break
+        time.sleep(0.2)
+
+
 min_price = input("Минимальная сумма: ")
 max_price = input("Максимальная сумма: ")
 
@@ -99,48 +145,21 @@ englishWears = {
 }
 
 csgo_items = []
-other_items = []
+rust_items = []
+dota_items = []
 
 for item in items:
-    if (
-            item["wear"] not in wears and
-            item["wear"] != '' or
-            item["title"] == 'Engineer SMG'
-    ):
-        other_items.append(item)
+    if item['title'] != '' and item['subtitle'] == '' and item['wear'] != '':
+        dota_items.append(item)
+    elif item['title'] != '' and item['subtitle'] == '' and item['wear'] == '':
+        if item['title'] == 'Engineer SMG':
+            rust_items.append(item)
     else:
         csgo_items.append(item)
 
-print(other_items, '\n')
+print(csgo_items, '\n', '___________')
+print(dota_items, '\n', '___________')
+print(rust_items, '\n', '___________')
 
-for item in csgo_items:
-    if item['wear'] in wears:
-        url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
-              f"{item['subtitle']} ({englishWears[item['wear']]})"
-    else:
-        url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
-              f"{item['subtitle']}"
-
-    while True:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if data is not None:
-                try:
-                    print(item['title'], '|', item['subtitle'], f'({item["wear"]})' if item['wear'] in wears else '')
-                    print('Цены:', item['price'], '=>', data['lowest_price'], '\n')
-                    break
-                except Exception:
-                    print('Не удалось получить lowest_price для', url, '\n')
-                    break
-            else:
-                print('API вернул null, повторяем через 5 секунд\n')
-                time.sleep(5)
-        elif response.status_code == 429:
-            print(f"Ошибка запроса: {response.status_code} \n {url}")
-            print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
-            time.sleep(60)
-        else:
-            print(f"Ошибка запроса: {response.status_code} \n {url} \n")
-            break
-    time.sleep(0.33)
+start_looking_items_in_steam_market(csgo_items, 'csgo')
+start_looking_items_in_steam_market(dota_items, 'dota')
