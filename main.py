@@ -7,6 +7,7 @@ import time
 
 import requests
 
+top_prices_copy = {}
 
 def check_majority(driver):
     switch_label = driver.find_element(By.CSS_SELECTOR, 'label.agree-switcher')
@@ -40,6 +41,9 @@ def update_top_prices(top_prices, top_price_item_data, wears):
         top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
         top_prices.pop()
 
+    global top_prices_copy
+    top_prices_copy = top_prices
+
     with open("Log.txt", "w", encoding='utf-8') as file:
         top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
         for skin_data in top_prices:
@@ -56,7 +60,10 @@ def update_top_prices(top_prices, top_price_item_data, wears):
 
 
 def start_looking_items_in_steam_market(items, items_game):
+    global top_prices_copy
     top_prices = []
+    if top_prices_copy:
+        top_prices = top_prices_copy[:]
     for item in items:
         if items_game == 'csgo':
             if item['wear'] in wears:
