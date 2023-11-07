@@ -1,70 +1,183 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions as ec
+
 import os
 import time
-
 import requests
 
-top_prices_copy = {}
 
-def check_majority(driver):
-    switch_label = driver.find_element(By.CSS_SELECTOR, 'label.agree-switcher')
-    switch_label.click()
+class SteamMarketScraper:
+    def __init__(self):
+        self.top_prices_copy = {}
 
+    def init(self, min_price, max_price):
+        chrome_driver_path = './chromedriver.exe'
+        os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
 
-def set_needed_price(driver, min_price, max_price):
-    min_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[0]
-    max_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[1]
-    min_price_input.clear()
-    max_price_input.clear()
-    min_price_input.send_keys(min_price)
-    max_price_input.send_keys(max_price)
+        driver = webdriver.Chrome()
 
+        driver.get('https://csgo3.run/market/')
 
-def load_all_items(driver):
+        # wait = WebDriverWait(driver, 3)
+
+        self.check_majority(driver)
+
+        self.set_needed_price(driver, min_price, max_price)
+
+        time.sleep(1)
+
+        log_delimiter = '____________________________'
+
+        print("\nПолучаем предметы с рана...")
+
+        self.load_all_items(driver)
+
+        drop_preview_elements = driver.find_elements(By.CLASS_NAME, 'drop-preview')
+
+        print("\nКоличество предметов:", len(drop_preview_elements), '\n', log_delimiter)
+
+        print("\nПредметы успешно полученны, обрабатываем их... \n", log_delimiter)
+
+        items = self.process_csrun_items(drop_preview_elements, log_delimiter)
+
+        print("\nВсе предметы успешно обработаны \n", log_delimiter)
+
+        driver.quit()
+
+        csgo_items = []
+        rust_items = []
+        dota_items = []
+
+        for item in items:
+            if item['title'] != '' and item['subtitle'] == '' and item['wear'] != '':
+                dota_items.append(item)
+            elif item['title'] != '' and item['subtitle'] == '' and item['wear'] == '':
+                if item['title'] == 'Engineer SMG':
+                    rust_items.append(item)
+            else:
+                csgo_items.append(item)
+
+        print('Найденно вещей из csgo: ', len(csgo_items), '\n', log_delimiter)
+        print('Найденно вещей dota 2: ', len(dota_items), '\n', log_delimiter)
+        print('Найденно вещей rust: ', len(rust_items), '\n', log_delimiter)
+
+        print('\nПриступаем к получению цен... \n', log_delimiter, '\n')
+
+        self.start_looking_items_in_steam_market(csgo_items, 'csgo')
+        self.start_looking_items_in_steam_market(dota_items, 'dota')
+
+    def process_csrun_items(self, drop_preview_elements, log_delimeter):
+        items = []
+        for card in drop_preview_elements:
+            price_el = card.find_element(By.CLASS_NAME, 'drop-preview__price')
+            title_el = card.find_element(By.CLASS_NAME, 'drop-preview__title')
+            subtitle_el = card.find_element(By.CLASS_NAME, 'drop-preview__subtitle')
+            desc_el = card.find_element(By.CLASS_NAME, 'drop-preview__desc')
+
+            item_data = {
+                "price": price_el.text,
+                "title": title_el.text,
+                "subtitle": subtitle_el.text,
+                "wear": desc_el.text
+            }
+
+            items.append(item_data)
+
+            print("Цена:", item_data["price"])
+            print("Название:", item_data["title"])
+            print("Износ:", item_data["wear"])
+            print(log_delimeter)
+
+        return items
+
+    def check_majority(self, driver):
+        switch_label = driver.find_element(By.CSS_SELECTOR, 'label.agree-switcher')
+        switch_label.click()
+
+    def set_needed_price(self, driver, min_price, max_price):
+        min_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[0]
+        max_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[1]
+        min_price_input.clear()
+        max_price_input.clear()
+        min_price_input.send_keys(min_price)
+        max_price_input.send_keys(max_price)
+
+    def load_all_items(self, driver):
         while True:
             try:
                 load_more_btn = WebDriverWait(driver, 1).until(
-                    EC.visibility_of_element_located((By.CSS_SELECTOR, '.load-more')))
+                    ec.visibility_of_element_located((By.CSS_SELECTOR, '.load-more')))
                 load_more_btn.click()
                 time.sleep(1)
             except:
                 break
 
+    def update_top_prices(self, top_prices, top_price_item_data, wears):
+        top_prices.append(top_price_item_data)
+        if len(top_prices) > 20:
+            top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
+            top_prices.pop()
 
-def update_top_prices(top_prices, top_price_item_data, wears):
-    top_prices.append(top_price_item_data)
-
-    if len(top_prices) > 20:
+        self.top_prices_copy = top_prices
         top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
-        top_prices.pop()
 
-    global top_prices_copy
-    top_prices_copy = top_prices
+        self.writeTopPricesInFile(top_prices, wears)
 
-    with open("Log.txt", "w", encoding='utf-8') as file:
-        top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
-        for skin_data in top_prices:
-            file.write(f"{skin_data['name']} ")
-            file.write(
-                f"({skin_data['wear']}) "
-                if skin_data['wear'] in wears else ''
-            )
-            file.write(
-                f"=> {skin_data['difference_in_percents']}% "
-                f"\n Цены: {skin_data['run_price']}$ => {skin_data['steam_price']}$"
-                f" \n __________________________ \n"
-            )
+    def start_looking_items_in_steam_market(self, items, items_game):
+        top_prices = []
+        wears = self.getWears()
+        english_wears = self.getWearsOnEnglish()
 
+        if self.top_prices_copy:
+            top_prices = self.top_prices_copy[:]
+        for item in items:
+            url = self.getItemUrl(item, items_game, wears ,english_wears)
+            attempts_to_get_item_data = 0
+            while True:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    data = response.json()
 
-def start_looking_items_in_steam_market(items, items_game):
-    global top_prices_copy
-    top_prices = []
-    if top_prices_copy:
-        top_prices = top_prices_copy[:]
-    for item in items:
+                    try:
+                        run_price = float(item['price'].replace('$', ''))
+                        steam_price = float(data['lowest_price'].replace('$', ''))
+                        difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
+                        price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
+
+                        self.logChekingSuccess(item, items_game, price_info, wears)
+
+                        result_item_key = self.getResoultItemKey(item)
+
+                        self.update_top_prices(top_prices, {
+                            'name': result_item_key,
+                            'difference_in_percents': difference_in_percents,
+                            'run_price': run_price,
+                            'steam_price': steam_price,
+                            'wear': item['wear']
+                        }, wears)
+
+                        break
+                    except Exception:
+                        print('Не удалось получить минимальную цену для', url, '\n')
+                        if attempts_to_get_item_data < 2 and item['title'] != 'Sticker':
+                            print('Возможно предмет незагрузился, попробуем ещё раз')
+                            time.sleep(2)
+                            attempts_to_get_item_data += 1
+                        else:
+                            break
+                elif response.status_code == 429:
+                    self.logCheckingError429(response.status_code, url)
+                    time.sleep(60)
+                else:
+                    print(f"Ошибка запроса: {response.status_code} для предмета: \n {url}")
+                    if item['title'] == 'Sticker':
+                        print('Вероятнее всего существует несколько его версий \n')
+                    break
+
+    def getItemUrl(self, item, items_game, wears, englishWears):
+        url = ''
         if items_game == 'csgo':
             if item['wear'] in wears:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
@@ -75,138 +188,63 @@ def start_looking_items_in_steam_market(items, items_game):
         elif items_game == 'dota':
             url = 'https://steamcommunity.com/market/priceoverview/?appid=570&currency=1' \
                   f"&market_hash_name={item['title']}"
-        attempts_to_get_item_data = 0
-        while True:
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
+        return url
 
-                try:
-                    run_price = float(item['price'].replace('$', ''))
-                    steam_price = float(data['lowest_price'].replace('$', ''))
-                    difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
-                    price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
-                    if items_game == 'dota':
-                        print(item['title'])
-                        print(price_info, '\n')
+    def logChekingSuccess(self, item, items_game, price, wears):
+        if items_game == 'dota':
+            print(item['title'])
+            print(price, '\n')
 
-                    elif items_game == 'csgo':
-                        print(item['title'], '|', item['subtitle'],
-                              f'({item["wear"]})' if item['wear'] in wears else '')
-                        print(price_info, '\n')
+        elif items_game == 'csgo':
+            print(item['title'], '|', item['subtitle'],
+                  f'({item["wear"]})' if item['wear'] in wears else '')
+            print(price, '\n')
 
-                    key = f"{item['title']}"
-                    key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
+    def logCheckingError429(self, status_code, url):
+        print(f"Ошибка запроса: {status_code} \n {url}")
+        print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
 
-                    update_top_prices(top_prices, {
-                        'name': key,
-                        'difference_in_percents': difference_in_percents,
-                        'run_price': run_price,
-                        'steam_price': steam_price,
-                        'wear': item['wear']
-                    }, wears)
+    def writeTopPricesInFile(self, top_prices, wears):
+        with open("result.txt", "w", encoding='utf-8') as file:
+            for skin_data in top_prices:
+                file.write(f"{skin_data['name']} ")
+                file.write(
+                    f"({skin_data['wear']}) "
+                    if skin_data['wear'] in wears else ''
+                )
+                file.write(
+                    f"=> {skin_data['difference_in_percents']}% "
+                    f"\n Цены: {skin_data['run_price']}$ => {skin_data['steam_price']}$"
+                    f" \n __________________________ \n"
+                )
 
-                    break
-                except Exception:
-                    print('Не удалось получить lowest_price для', url, '\n')
-                    if attempts_to_get_item_data < 1 and item['title'] != 'Sticker':
-                        print('Возможно айтем незагрузился, попробуем ещё раз')
-                        time.sleep(2)
-                        attempts_to_get_item_data += 1
-                    else:
-                        break
-            elif response.status_code == 429:
-                print(f"Ошибка запроса: {response.status_code} \n {url}")
-                print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
-                time.sleep(60)
-            else:
-                print(f"Ошибка запроса: {response.status_code} \n {url} \n")
-                break
+    def getResoultItemKey(self, item):
+        key = f"{item['title']}"
+        key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
+        return key
 
+    def getWearsOnEnglish(self):
+        return {
+            'Прямо с завода': 'Factory New',
+            'Немного поношенное': 'Minimal Wear',
+            'После полевых': 'Field-Tested',
+            'Поношенное': 'Well-Worn',
+            'Закалённое в боях': 'Battle-Scarred'
+        }
 
-time.sleep(0.2)
+    def getWears(self):
+        return {
+            'Прямо с завода',
+            'Немного поношенное',
+            'После полевых',
+            'Поношенное',
+            'Закалённое в боях'
+        }
+
 
 min_price = input("Минимальная сумма: ")
 max_price = input("Максимальная сумма: ")
 
-chrome_driver_path = './chromedriver.exe'
-os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
+steamScrapper = SteamMarketScraper()
 
-driver = webdriver.Chrome()
-
-driver.get('https://csgo3.run/market/')
-
-wait = WebDriverWait(driver, 3)
-
-check_majority(driver)
-
-set_needed_price(driver, min_price, max_price)
-
-time.sleep(1)
-
-load_all_items(driver)
-
-drop_preview_elements = driver.find_elements(By.CLASS_NAME, 'drop-preview')
-
-print("Количество товаров:", len(drop_preview_elements))
-print('\n', '_______________________')
-
-items = []
-
-for card in drop_preview_elements:
-    price_el = card.find_element(By.CLASS_NAME, 'drop-preview__price')
-    title_el = card.find_element(By.CLASS_NAME, 'drop-preview__title')
-    subtitle_el = card.find_element(By.CLASS_NAME, 'drop-preview__subtitle')
-    desc_el = card.find_element(By.CLASS_NAME, 'drop-preview__desc')
-
-    item_data = {
-        "price": price_el.text,
-        "title": title_el.text,
-        "subtitle": subtitle_el.text,
-        "wear": desc_el.text
-    }
-
-    items.append(item_data)
-
-    print("Цена:", item_data["price"])
-    print("Название:", item_data["title"])
-    print("Износ:", item_data["wear"])
-    print('_______________________')
-
-driver.quit()
-
-wears = [
-    'Прямо с завода',
-    'Немного поношенное',
-    'После полевых',
-    'Поношенное',
-    'Закалённое в боях'
-]
-
-englishWears = {
-    'Прямо с завода': 'Factory New',
-    'Немного поношенное': 'Minimal Wear',
-    'После полевых': 'Field-Tested',
-    'Поношенное': 'Well-Worn',
-    'Закалённое в боях': 'Battle-Scarred'
-}
-
-csgo_items = []
-rust_items = []
-dota_items = []
-
-for item in items:
-    if item['title'] != '' and item['subtitle'] == '' and item['wear'] != '':
-        dota_items.append(item)
-    elif item['title'] != '' and item['subtitle'] == '' and item['wear'] == '':
-        if item['title'] == 'Engineer SMG':
-            rust_items.append(item)
-    else:
-        csgo_items.append(item)
-
-print(csgo_items, '\n', '___________')
-print(dota_items, '\n', '___________')
-print(rust_items, '\n', '___________')
-
-start_looking_items_in_steam_market(csgo_items, 'csgo')
-start_looking_items_in_steam_market(dota_items, 'dota')
+steamScrapper.init(min_price, max_price)
