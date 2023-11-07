@@ -10,7 +10,7 @@ import requests
 
 class SteamMarketScraper:
     def __init__(self):
-        self.top_prices_copy = {}
+        self.top_prices = []
         self.total_iterations = 0
         self.items_total_count = 0
 
@@ -19,17 +19,12 @@ class SteamMarketScraper:
         os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
 
         driver = webdriver.Chrome()
-
         driver.get('https://csgo3.run/market/')
-
         # wait = WebDriverWait(driver, 3)
-
         self.check_majority(driver)
-
         self.set_needed_price(driver, min_price, max_price)
 
         time.sleep(1)
-
         log_delimiter = '____________________________'
 
         print("\nПолучаем предметы с рана...")
@@ -41,7 +36,6 @@ class SteamMarketScraper:
         self.items_total_count = len(drop_preview_elements)
 
         print("\nКоличество предметов:", self.items_total_count, '\n', log_delimiter)
-
         print("\nПредметы успешно полученны, обрабатываем их... \n", log_delimiter)
 
         items = self.process_csrun_items(drop_preview_elements, log_delimiter)
@@ -72,7 +66,7 @@ class SteamMarketScraper:
         self.start_looking_items_in_steam_market(csgo_items, 'csgo')
         self.start_looking_items_in_steam_market(dota_items, 'dota')
 
-    def process_csrun_items(self, drop_preview_elements, log_delimeter):
+    def process_csrun_items(self, drop_preview_elements, log_delimiter):
         items = []
         for card in drop_preview_elements:
             price_el = card.find_element(By.CLASS_NAME, 'drop-preview__price')
@@ -92,7 +86,7 @@ class SteamMarketScraper:
             print("Цена:", item_data["price"])
             print("Название:", item_data["title"])
             print("Износ:", item_data["wear"])
-            print(log_delimeter)
+            print(log_delimiter)
 
         return items
 
@@ -118,24 +112,20 @@ class SteamMarketScraper:
             except:
                 break
 
-    def update_top_prices(self, top_prices, top_price_item_data, wears):
-        top_prices.append(top_price_item_data)
-        if len(top_prices) > 20:
-            top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
-            top_prices.pop()
+    def update_top_prices(self, top_price_item_data, wears):
+        self.top_prices.append(top_price_item_data)
+        if len(self.top_prices) > 20:
+            self.top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
+            self.top_prices.pop()
 
-        self.top_prices_copy = top_prices
-        top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
+        self.top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
 
-        self.writeTopPricesInFile(top_prices, wears)
+        self.writeTopPricesInFile( self.top_prices, wears)
 
     def start_looking_items_in_steam_market(self, items, items_game):
-        top_prices = []
         wears = self.getWears()
         english_wears = self.getWearsOnEnglish()
 
-        if self.top_prices_copy:
-            top_prices = self.top_prices_copy[:]
         for item in items:
             attempts_to_get_item_data = 0
             url = self.getItemUrl(item, items_game, wears ,english_wears)
@@ -154,7 +144,7 @@ class SteamMarketScraper:
 
                         result_item_key = self.getResoultItemKey(item)
 
-                        self.update_top_prices(top_prices, {
+                        self.update_top_prices({
                             'name': result_item_key,
                             'difference_in_percents': difference_in_percents,
                             'run_price': run_price,
