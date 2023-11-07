@@ -23,18 +23,18 @@ def set_needed_price(driver, min_price, max_price):
 
 
 def load_all_items(driver):
-    while True:
-        try:
-            load_more_btn = WebDriverWait(driver, 1).until(
-                EC.visibility_of_element_located((By.CSS_SELECTOR, '.load-more')))
-            load_more_btn.click()
-            time.sleep(1)
-        except:
-            break
+        while True:
+            try:
+                load_more_btn = WebDriverWait(driver, 1).until(
+                    EC.visibility_of_element_located((By.CSS_SELECTOR, '.load-more')))
+                load_more_btn.click()
+                time.sleep(1)
+            except:
+                break
 
 
-def update_top_prices(top_prices, item_data, wears):
-    top_prices.append(item_data)
+def update_top_prices(top_prices, top_price_item_data, wears):
+    top_prices.append(top_price_item_data)
 
     if len(top_prices) > 20:
         top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
@@ -42,15 +42,15 @@ def update_top_prices(top_prices, item_data, wears):
 
     with open("Log.txt", "w", encoding='utf-8') as file:
         top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
-        for item_data in top_prices:
-            file.write(f"{item_data['name']}")
+        for skin_data in top_prices:
+            file.write(f"{skin_data['name']} ")
             file.write(
-                f" ({item_data['wear']})"
-                if item_data['wear'] in wears else ''
+                f"({skin_data['wear']}) "
+                if skin_data['wear'] in wears else ''
             )
             file.write(
-                f" => {item_data['difference_in_percents']}% "
-                f"\n Цены: {item_data['run_price']}$ => {item_data['steam_price']}$"
+                f"=> {skin_data['difference_in_percents']}% "
+                f"\n Цены: {skin_data['run_price']}$ => {skin_data['steam_price']}$"
                 f" \n __________________________ \n"
             )
 
@@ -88,7 +88,8 @@ def start_looking_items_in_steam_market(items, items_game):
                               f'({item["wear"]})' if item['wear'] in wears else '')
                         print(price_info, '\n')
 
-                    key = f"{item['title']} | {item['subtitle']}"
+                    key = f"{item['title']}"
+                    key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
 
                     update_top_prices(top_prices, {
                         'name': key,
@@ -134,9 +135,9 @@ check_majority(driver)
 
 set_needed_price(driver, min_price, max_price)
 
-load_all_items(driver)
+time.sleep(1)
 
-# driver.implicitly_wait(3)
+load_all_items(driver)
 
 drop_preview_elements = driver.find_elements(By.CLASS_NAME, 'drop-preview')
 
