@@ -10,9 +10,14 @@ import requests
 
 class SteamMarketScraper:
     def __init__(self):
-        self.top_prices = []
+        self.top_prices = {
+            'csgo': [],
+            'dota': [],
+            'rust': []
+        }
         self.total_iterations = 0
         self.items_total_count = 0
+        self.items_game = ''
 
     def init(self, min_price, max_price):
         chrome_driver_path = './chromedriver.exe'
@@ -113,16 +118,39 @@ class SteamMarketScraper:
                 break
 
     def update_top_prices(self, top_price_item_data, wears):
-        self.top_prices.append(top_price_item_data)
-        if len(self.top_prices) > 20:
-            self.top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
-            self.top_prices.pop()
+        self.top_prices[self.items_game].append(top_price_item_data)
+        if len(self.top_prices[self.items_game]) > 20:
+            self.top_prices[self.items_game].sort(key=lambda x: x['difference_in_percents'], reverse=True)
+            self.top_prices[self.items_game].pop()
 
-        self.top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
+        self.top_prices[self.items_game].sort(key=lambda x: x['difference_in_percents'], reverse=True)
+        self.setTopPrices(wears)
 
-        self.writeTopPricesInFile( self.top_prices, wears)
+    def setTopPrices(self, wears):
+
+        with open("result.txt", "w", encoding='utf-8') as file:
+            file.write('Предметы из CS:GO:\n')
+            self.write_top_prices_in_file(file, 'csgo', wears)
+            file.write('\nПредметы из Dota 2:\n')
+            self.write_top_prices_in_file(file, 'dota', wears)
+            file.write('\nПредметы из Rust:\n')
+            self.write_top_prices_in_file(file, 'rust', wears)
+
+    def write_top_prices_in_file(self, file, game, wears):
+        for skin_data in self.top_prices[game]:
+            file.write(f"{skin_data['name']} ")
+            file.write(
+                f"({skin_data['wear']}) "
+                if skin_data['wear'] in wears else ''
+            )
+            file.write(
+                f"=> {skin_data['difference_in_percents']}%\n"
+                f"Цены: {skin_data['run_price']}$ => {skin_data['steam_price']}$"
+                f"\n________________________\n"
+            )
 
     def start_looking_items_in_steam_market(self, items, items_game):
+        self.items_game = items_game
         wears = self.getWears()
         english_wears = self.getWearsOnEnglish()
 
@@ -186,20 +214,6 @@ class SteamMarketScraper:
             url = 'https://steamcommunity.com/market/priceoverview/?appid=570&currency=1' \
                   f"&market_hash_name={item['title']}"
         return url
-
-    def writeTopPricesInFile(self, top_prices, wears):
-        with open("result.txt", "w", encoding='utf-8') as file:
-            for skin_data in top_prices:
-                file.write(f"{skin_data['name']} ")
-                file.write(
-                    f"({skin_data['wear']}) "
-                    if skin_data['wear'] in wears else ''
-                )
-                file.write(
-                    f"=> {skin_data['difference_in_percents']}% "
-                    f"\n Цены: {skin_data['run_price']}$ => {skin_data['steam_price']}$"
-                    f" \n __________________________ \n"
-                )
 
     def logChekingSuccess(self, item, items_game, price, wears):
         if items_game == 'dota':
