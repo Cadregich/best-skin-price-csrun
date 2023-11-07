@@ -11,6 +11,8 @@ import requests
 class SteamMarketScraper:
     def __init__(self):
         self.top_prices_copy = {}
+        self.total_iterations = 0
+        self.items_total_count = 0
 
     def init(self, min_price, max_price):
         chrome_driver_path = './chromedriver.exe'
@@ -36,7 +38,9 @@ class SteamMarketScraper:
 
         drop_preview_elements = driver.find_elements(By.CLASS_NAME, 'drop-preview')
 
-        print("\nКоличество предметов:", len(drop_preview_elements), '\n', log_delimiter)
+        self.items_total_count = len(drop_preview_elements)
+
+        print("\nКоличество предметов:", self.items_total_count, '\n', log_delimiter)
 
         print("\nПредметы успешно полученны, обрабатываем их... \n", log_delimiter)
 
@@ -133,8 +137,8 @@ class SteamMarketScraper:
         if self.top_prices_copy:
             top_prices = self.top_prices_copy[:]
         for item in items:
-            url = self.getItemUrl(item, items_game, wears ,english_wears)
             attempts_to_get_item_data = 0
+            url = self.getItemUrl(item, items_game, wears ,english_wears)
             while True:
                 response = requests.get(url)
                 if response.status_code == 200:
@@ -176,6 +180,9 @@ class SteamMarketScraper:
                         print('Вероятнее всего существует несколько его версий \n')
                     break
 
+            self.total_iterations += 1
+            print(f"Предметов обработанно: {self.total_iterations} / {self.items_total_count} \n")
+
     def getItemUrl(self, item, items_game, wears, englishWears):
         url = ''
         if items_game == 'csgo':
@@ -189,20 +196,6 @@ class SteamMarketScraper:
             url = 'https://steamcommunity.com/market/priceoverview/?appid=570&currency=1' \
                   f"&market_hash_name={item['title']}"
         return url
-
-    def logChekingSuccess(self, item, items_game, price, wears):
-        if items_game == 'dota':
-            print(item['title'])
-            print(price, '\n')
-
-        elif items_game == 'csgo':
-            print(item['title'], '|', item['subtitle'],
-                  f'({item["wear"]})' if item['wear'] in wears else '')
-            print(price, '\n')
-
-    def logCheckingError429(self, status_code, url):
-        print(f"Ошибка запроса: {status_code} \n {url}")
-        print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
 
     def writeTopPricesInFile(self, top_prices, wears):
         with open("result.txt", "w", encoding='utf-8') as file:
@@ -218,19 +211,24 @@ class SteamMarketScraper:
                     f" \n __________________________ \n"
                 )
 
+    def logChekingSuccess(self, item, items_game, price, wears):
+        if items_game == 'dota':
+            print(item['title'])
+            print(price, '\n')
+
+        elif items_game == 'csgo':
+            print(item['title'], '|', item['subtitle'],
+                  f'({item["wear"]})' if item['wear'] in wears else '')
+            print(price, '\n')
+
+    def logCheckingError429(self, status_code, url):
+        print(f"Ошибка запроса: {status_code} \n {url}")
+        print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
+
     def getResoultItemKey(self, item):
         key = f"{item['title']}"
         key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
         return key
-
-    def getWearsOnEnglish(self):
-        return {
-            'Прямо с завода': 'Factory New',
-            'Немного поношенное': 'Minimal Wear',
-            'После полевых': 'Field-Tested',
-            'Поношенное': 'Well-Worn',
-            'Закалённое в боях': 'Battle-Scarred'
-        }
 
     def getWears(self):
         return {
@@ -239,6 +237,15 @@ class SteamMarketScraper:
             'После полевых',
             'Поношенное',
             'Закалённое в боях'
+        }
+
+    def getWearsOnEnglish(self):
+        return {
+            'Прямо с завода': 'Factory New',
+            'Немного поношенное': 'Minimal Wear',
+            'После полевых': 'Field-Tested',
+            'Поношенное': 'Well-Worn',
+            'Закалённое в боях': 'Battle-Scarred'
         }
 
 
