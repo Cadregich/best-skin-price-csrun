@@ -33,10 +33,31 @@ def load_all_items(driver):
             break
 
 
+def update_top_prices(top_prices, item_data, wears):
+    top_prices.append(item_data)
+
+    if len(top_prices) > 20:
+        top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
+        top_prices.pop()
+
+    with open("Log.txt", "w", encoding='utf-8') as file:
+        top_prices.sort(key=lambda x: x['difference_in_percents'], reverse=True)
+        for item_data in top_prices:
+            file.write(f"{item_data['name']}")
+            file.write(
+                f" ({item_data['wear']})"
+                if item_data['wear'] in wears else ''
+            )
+            file.write(
+                f" => {item_data['difference_in_percents']}% "
+                f"\n Цены: {item_data['run_price']}$ => {item_data['steam_price']}$"
+                f" \n __________________________ \n"
+            )
+
+
 def start_looking_items_in_steam_market(items, items_game):
-    top_prices = {}
+    top_prices = []
     for item in items:
-        key = f"{item['title']} | {item['subtitle']}"
         if items_game == 'csgo':
             if item['wear'] in wears:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
@@ -47,48 +68,45 @@ def start_looking_items_in_steam_market(items, items_game):
         elif items_game == 'dota':
             url = 'https://steamcommunity.com/market/priceoverview/?appid=570&currency=1' \
                   f"&market_hash_name={item['title']}"
+        attempts_to_get_item_data = 0
         while True:
             response = requests.get(url)
             if response.status_code == 200:
                 data = response.json()
-                if data is not None:
-                    try:
-                        run_price = float(item['price'].replace('$', ''))
-                        steam_price = float(data['lowest_price'].replace('$', ''))
-                        difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
-                        price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
-                        if items_game == 'dota':
-                            print(item['title'])
-                            print(price_info, '\n')
-                        elif items_game == 'csgo':
-                            print(item['title'], '|', item['subtitle'],
-                                  f'({item["wear"]})' if item['wear'] in wears else '')
-                            print(price_info, '\n')
 
-                            result_string = ""
+                try:
+                    run_price = float(item['price'].replace('$', ''))
+                    steam_price = float(data['lowest_price'].replace('$', ''))
+                    difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
+                    price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
+                    if items_game == 'dota':
+                        print(item['title'])
+                        print(price_info, '\n')
 
-                            top_prices[key] = difference_in_percents
+                    elif items_game == 'csgo':
+                        print(item['title'], '|', item['subtitle'],
+                              f'({item["wear"]})' if item['wear'] in wears else '')
+                        print(price_info, '\n')
 
-                            if len(top_prices) > 20:
-                                min_key = min(top_prices, key=top_prices.get)
-                                del top_prices[min_key]
+                    key = f"{item['title']} | {item['subtitle']}"
 
-                            sorted_top_prices = sorted(top_prices.items(), key=lambda x: x[1], reverse=True)
+                    update_top_prices(top_prices, {
+                        'name': key,
+                        'difference_in_percents': difference_in_percents,
+                        'run_price': run_price,
+                        'steam_price': steam_price,
+                        'wear': item['wear']
+                    }, wears)
 
-                            for item_name, diff in sorted_top_prices:
-                                result_string += f"{item_name} => {diff}% \n"
-
-                            # print(result_string)
-
-                            with open("Log.txt", "w", encoding='utf-8') as file:
-                                file.write(f"{result_string}\n")
-                            break
-                    except Exception:
-                        print('Не удалось получить lowest_price для', url, '\n')
+                    break
+                except Exception:
+                    print('Не удалось получить lowest_price для', url, '\n')
+                    if attempts_to_get_item_data < 1 and item['title'] != 'Sticker':
+                        print('Возможно айтем незагрузился, попробуем ещё раз')
+                        time.sleep(2)
+                        attempts_to_get_item_data += 1
+                    else:
                         break
-                else:
-                    print('API вернул null, повторяем через 5 секунд\n')
-                    time.sleep(5)
             elif response.status_code == 429:
                 print(f"Ошибка запроса: {response.status_code} \n {url}")
                 print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
@@ -96,8 +114,9 @@ def start_looking_items_in_steam_market(items, items_game):
             else:
                 print(f"Ошибка запроса: {response.status_code} \n {url} \n")
                 break
-        time.sleep(0.2)
 
+
+time.sleep(0.2)
 
 min_price = input("Минимальная сумма: ")
 max_price = input("Максимальная сумма: ")
