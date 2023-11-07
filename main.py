@@ -19,6 +19,22 @@ class SteamMarketScraper:
         self.items_total_count = 0
         self.items_game = ''
 
+        self.wears = {
+            'Прямо с завода',
+            'Немного поношенное',
+            'После полевых',
+            'Поношенное',
+            'Закалённое в боях'
+        }
+
+        self.wears_english = {
+            'Прямо с завода': 'Factory New',
+            'Немного поношенное': 'Minimal Wear',
+            'После полевых': 'Field-Tested',
+            'Поношенное': 'Well-Worn',
+            'Закалённое в боях': 'Battle-Scarred'
+        }
+
     def init(self, min_price, max_price):
         chrome_driver_path = './chromedriver.exe'
         os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
@@ -117,31 +133,31 @@ class SteamMarketScraper:
             except:
                 break
 
-    def update_top_prices(self, top_price_item_data, wears):
+    def update_top_prices(self, top_price_item_data):
         self.top_prices[self.items_game].append(top_price_item_data)
         if len(self.top_prices[self.items_game]) > 20:
             self.top_prices[self.items_game].sort(key=lambda x: x['difference_in_percents'], reverse=True)
             self.top_prices[self.items_game].pop()
 
         self.top_prices[self.items_game].sort(key=lambda x: x['difference_in_percents'], reverse=True)
-        self.setTopPrices(wears)
+        self.setTopPrices()
 
-    def setTopPrices(self, wears):
+    def setTopPrices(self):
 
         with open("result.txt", "w", encoding='utf-8') as file:
             file.write('Предметы из CS:GO:\n')
-            self.write_top_prices_in_file(file, 'csgo', wears)
+            self.write_top_prices_in_file(file, 'csgo')
             file.write('\nПредметы из Dota 2:\n')
-            self.write_top_prices_in_file(file, 'dota', wears)
+            self.write_top_prices_in_file(file, 'dota')
             file.write('\nПредметы из Rust:\n')
-            self.write_top_prices_in_file(file, 'rust', wears)
+            self.write_top_prices_in_file(file, 'rust')
 
-    def write_top_prices_in_file(self, file, game, wears):
+    def write_top_prices_in_file(self, file, game):
         for skin_data in self.top_prices[game]:
             file.write(f"{skin_data['name']} ")
             file.write(
                 f"({skin_data['wear']}) "
-                if skin_data['wear'] in wears else ''
+                if skin_data['wear'] in self.wears else ''
             )
             file.write(
                 f"=> {skin_data['difference_in_percents']}%\n"
@@ -151,12 +167,10 @@ class SteamMarketScraper:
 
     def start_looking_items_in_steam_market(self, items, items_game):
         self.items_game = items_game
-        wears = self.getWears()
-        english_wears = self.getWearsOnEnglish()
 
         for item in items:
             attempts_to_get_item_data = 0
-            url = self.getItemUrl(item, items_game, wears ,english_wears)
+            url = self.getItemUrl(item, items_game)
             while True:
                 response = requests.get(url)
                 if response.status_code == 200:
@@ -168,7 +182,7 @@ class SteamMarketScraper:
                         difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
                         price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
 
-                        self.logChekingSuccess(item, items_game, price_info, wears)
+                        self.logChekingSuccess(item, items_game, price_info)
 
                         result_item_key = self.getResoultItemKey(item)
 
@@ -178,7 +192,7 @@ class SteamMarketScraper:
                             'run_price': run_price,
                             'steam_price': steam_price,
                             'wear': item['wear']
-                        }, wears)
+                        })
 
                         break
                     except Exception:
@@ -201,12 +215,12 @@ class SteamMarketScraper:
             self.total_iterations += 1
             print(f"Предметов обработанно: {self.total_iterations} / {self.items_total_count} \n")
 
-    def getItemUrl(self, item, items_game, wears, englishWears):
+    def getItemUrl(self, item, items_game):
         url = ''
         if items_game == 'csgo':
-            if item['wear'] in wears:
+            if item['wear'] in self.wears:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
-                      f"{item['subtitle']} ({englishWears[item['wear']]})"
+                      f"{item['subtitle']} ({self.wears_english[item['wear']]})"
             else:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
                       f"{item['subtitle']}"
@@ -215,14 +229,14 @@ class SteamMarketScraper:
                   f"&market_hash_name={item['title']}"
         return url
 
-    def logChekingSuccess(self, item, items_game, price, wears):
+    def logChekingSuccess(self, item, items_game, price):
         if items_game == 'dota':
             print(item['title'])
             print(price, '\n')
 
         elif items_game == 'csgo':
             print(item['title'], '|', item['subtitle'],
-                  f'({item["wear"]})' if item['wear'] in wears else '')
+                  f'({item["wear"]})' if item['wear'] in self.wears else '')
             print(price, '\n')
 
     def logCheckingError429(self, status_code, url):
@@ -233,24 +247,6 @@ class SteamMarketScraper:
         key = f"{item['title']}"
         key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
         return key
-
-    def getWears(self):
-        return {
-            'Прямо с завода',
-            'Немного поношенное',
-            'После полевых',
-            'Поношенное',
-            'Закалённое в боях'
-        }
-
-    def getWearsOnEnglish(self):
-        return {
-            'Прямо с завода': 'Factory New',
-            'Немного поношенное': 'Minimal Wear',
-            'После полевых': 'Field-Tested',
-            'Поношенное': 'Well-Worn',
-            'Закалённое в боях': 'Battle-Scarred'
-        }
 
 
 min_price = input("Минимальная сумма: ")
