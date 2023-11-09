@@ -36,7 +36,7 @@ class SteamMarketScraper:
 
     def init(self, max_price, min_price):
         min_price = float(min_price)
-        chrome_driver_path = './chromedriver.exe'
+        chrome_driver_path = './browserdriver.exe'
         os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
 
         driver = webdriver.Chrome()
