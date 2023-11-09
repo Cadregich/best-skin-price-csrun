@@ -15,7 +15,11 @@ class SteamMarketScraper:
             'rust': []
         }
         self.total_iterations = 0
-        self.items_total_count = 0
+        self.items_total_count = {
+            'csgo': 0,
+            'dota': 0,
+            'rust': 0
+        }
         self.items_game = ''
 
         self.wears = {
@@ -36,6 +40,7 @@ class SteamMarketScraper:
 
     def init(self, max_price, min_price):
         min_price = float(min_price)
+        log_delimiter = '____________________________'
         chrome_driver_path = './browserdriver.exe'
         os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
 
@@ -43,28 +48,25 @@ class SteamMarketScraper:
         driver.get('https://csgo5.run/profile/inventory')
         self.set_needed_price(driver, max_price)
         time.sleep(1)
-        log_delimiter = '____________________________'
 
         games_block = driver.find_element(By.CSS_SELECTOR, '#market > div.contents.w-full.shrink-0.flex-col.pt-1.lg\:flex.lg\:h-full.lg\:w-67\.5.lg\:pb-5 > div.order-2.flex.gap-1\.5.lg\:flex-col')
-
         dota_btn = games_block.find_element(By.XPATH, './*')
         rust_btn = games_block.find_element(By.XPATH, './child::*[3]')
+        market_name = driver.find_element(By.CSS_SELECTOR, '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
 
-        market = driver.find_element(By.CSS_SELECTOR, '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
-
-        csgo_items = self.get_all_game_items(driver, market, 'csgo', min_price, log_delimiter)
+        csgo_items = self.get_all_game_items(driver, market_name, 'csgo', min_price, log_delimiter)
         dota_btn.click()
         time.sleep(1)
-        dota_items = self.get_all_game_items(driver, market, 'dota', min_price, log_delimiter)
+        dota_items = self.get_all_game_items(driver, market_name, 'dota', min_price, log_delimiter)
         rust_btn.click()
         time.sleep(1)
-        rust_items = self.get_all_game_items(driver, market, 'rust', min_price, log_delimiter)
+        rust_items = self.get_all_game_items(driver, market_name, 'rust', min_price, log_delimiter)
 
         driver.quit()
 
-        print('Найденно вещей из csgo: ', len(csgo_items), '\n', log_delimiter)
-        print('Найденно вещей dota 2: ', len(dota_items), '\n', log_delimiter)
-        print('Найденно вещей rust: ', len(rust_items), '\n', log_delimiter)
+        print('Найдено вещей из csgo: ', len(csgo_items), '\n', log_delimiter)
+        print('Найдено вещей dota 2: ', len(dota_items), '\n', log_delimiter)
+        print('Найдено вещей rust: ', len(rust_items), '\n', log_delimiter)
 
         print('\nПриступаем к получению цен... \n', log_delimiter, '\n')
 
@@ -73,7 +75,7 @@ class SteamMarketScraper:
         self.start_looking_items_in_steam_market(rust_items, 'rust')
 
     def get_all_game_items(self, driver, market_block, game, min_price, log_delimiter):
-        print(f"\nПолучаем {game} предметы с рынка...")
+        print(f"\nПолучаем {game} предметы с маркета csgorun...")
 
         self.load_all_items(driver, market_block, min_price)
 
@@ -85,10 +87,6 @@ class SteamMarketScraper:
             print(f'\nНе нашли предметов из {game} :( \n', log_delimiter)
             return []
 
-        self.items_total_count = len(drop_preview_elements)
-
-        print(f"\nКоличество предметов из {game}", self.items_total_count, '\n', log_delimiter)
-
         result_items = []
 
         for item in drop_preview_elements:
@@ -97,6 +95,8 @@ class SteamMarketScraper:
                 result_items.append(self.process_csrun_item(item, min_price, log_delimiter))
 
         print(f"\nВсе предметы из {game} успешно обработаны \n", log_delimiter)
+
+        self.items_total_count[game] = len(result_items)
 
         return result_items
 
@@ -109,7 +109,7 @@ class SteamMarketScraper:
                 return 'done'
 
         print("Цена:", item_data["price"])
-        print("Название:", item_data["title"])
+        print("Название:", self.get_full_item_title(item_data))
         print("Износ:", item_data["wear"])
         print(log_delimiter)
 
@@ -141,10 +141,6 @@ class SteamMarketScraper:
             "subtitle": subtitle,
             "wear": wear
         }
-
-    def check_majority(self, driver):
-        switch_label = driver.find_element(By.CSS_SELECTOR, 'label.agree-switcher')
-        switch_label.click()
 
     def set_needed_price(self, driver, max_price):
         max_price_input = driver.find_element(By.CSS_SELECTOR, 'input[placeholder="Макс. цена"]')
@@ -223,7 +219,7 @@ class SteamMarketScraper:
 
                         self.log_checking_success(item, items_game, price_info)
 
-                        result_item_key = self.get_result_item_key(item)
+                        result_item_key = self.get_full_item_title(item)
 
                         self.update_top_prices({
                             'name': result_item_key,
@@ -237,7 +233,7 @@ class SteamMarketScraper:
                     except Exception:
                         print('Не удалось получить минимальную цену для', url, '\n')
                         if attempts_to_get_item_data < 2 and item['title'] != 'Sticker':
-                            print('Возможно предмет незагрузился, попробуем ещё раз')
+                            print('Возможно предмет не загрузился, попробуем ещё раз')
                             time.sleep(2)
                             attempts_to_get_item_data += 1
                         else:
@@ -252,7 +248,7 @@ class SteamMarketScraper:
                     break
 
             self.total_iterations += 1
-            print(f"Предметов обработанно: {self.total_iterations} / {self.items_total_count} \n")
+            print(f"Предметов обработано из {items_game}: {self.total_iterations} / {self.items_total_count[items_game]} \n")
 
     def get_item_url(self, item, items_game):
         url = ''
@@ -282,7 +278,7 @@ class SteamMarketScraper:
         print(f"Ошибка запроса: {status_code} \n {url}")
         print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
 
-    def get_result_item_key(self, item):
+    def get_full_item_title(self, item):
         key = f"{item['title']}"
         key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
         return key
