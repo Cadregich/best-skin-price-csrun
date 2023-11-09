@@ -1,4 +1,5 @@
 from selenium import webdriver
+from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
@@ -20,63 +21,49 @@ class SteamMarketScraper:
         self.items_game = ''
 
         self.wears = {
-            'Прямо с завода',
-            'Немного поношенное',
-            'После полевых',
-            'Поношенное',
-            'Закалённое в боях'
+            'FN',
+            'MW',
+            'FT',
+            'WW',
+            'BS'
         }
 
         self.wears_english = {
-            'Прямо с завода': 'Factory New',
-            'Немного поношенное': 'Minimal Wear',
-            'После полевых': 'Field-Tested',
-            'Поношенное': 'Well-Worn',
-            'Закалённое в боях': 'Battle-Scarred'
+            'FN': 'Factory New',
+            'MW': 'Minimal Wear',
+            'FT': 'Field-Tested',
+            'WW': 'Well-Worn',
+            'BS': 'Battle-Scarred'
         }
 
-    def init(self, min_price, max_price):
+    def init(self, max_price):
         chrome_driver_path = './chromedriver.exe'
         os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
 
         driver = webdriver.Chrome()
-        driver.get('https://csgo3.run/market/')
+        driver.get('https://csgo5.run/profile/inventory')
         # wait = WebDriverWait(driver, 3)
-        self.check_majority(driver)
-        self.set_needed_price(driver, min_price, max_price)
-
+        self.set_needed_price(driver, max_price)
         time.sleep(1)
         log_delimiter = '____________________________'
 
-        print("\nПолучаем предметы с рана...")
+        games_block = driver.find_element(By.CSS_SELECTOR,
+                                          '#market > div.contents.w-full.shrink-0.flex-col.pt-1.lg\:flex.lg\:h-full.lg\:w-67\.5.lg\:pb-5 > div.order-2.flex.gap-1\.5.lg\:flex-col')
 
-        self.load_all_items(driver)
+        dota_btn = games_block.find_element(By.XPATH, './*')
+        rust_btn = games_block.find_element(By.XPATH, './child::*[3]')
 
-        drop_preview_elements = driver.find_elements(By.CLASS_NAME, 'drop-preview')
+        market = driver.find_element(By.CSS_SELECTOR, '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
 
-        self.items_total_count = len(drop_preview_elements)
-
-        print("\nКоличество предметов:", self.items_total_count, '\n', log_delimiter)
-        print("\nПредметы успешно полученны, обрабатываем их... \n", log_delimiter)
-
-        items = self.process_csrun_items(drop_preview_elements, log_delimiter)
-
-        print("\nВсе предметы успешно обработаны \n", log_delimiter)
+        csgo_items = self.getAllGameItems(driver, market, 'csgo', log_delimiter)
+        dota_btn.click()
+        time.sleep(1)
+        dota_items = self.getAllGameItems(driver, market, 'dota', log_delimiter)
+        rust_btn.click()
+        time.sleep(1)
+        rust_items = self.getAllGameItems(driver, market, 'rust', log_delimiter)
 
         driver.quit()
-
-        csgo_items = []
-        rust_items = []
-        dota_items = []
-
-        for item in items:
-            if item['title'] != '' and item['subtitle'] == '' and item['wear'] != '':
-                dota_items.append(item)
-            elif item['title'] != '' and item['subtitle'] == '' and item['wear'] == '':
-                if item['title'] == 'Engineer SMG':
-                    rust_items.append(item)
-            else:
-                csgo_items.append(item)
 
         print('Найденно вещей из csgo: ', len(csgo_items), '\n', log_delimiter)
         print('Найденно вещей dota 2: ', len(dota_items), '\n', log_delimiter)
@@ -87,21 +74,38 @@ class SteamMarketScraper:
         self.start_looking_items_in_steam_market(csgo_items, 'csgo')
         self.start_looking_items_in_steam_market(dota_items, 'dota')
 
+    def getAllGameItems(self, driver, market_block, game, log_delimiter):
+        print(f"\nПолучаем {game} предметы с рана...")
+
+        self.load_all_items(driver, market_block)
+
+        print(f"\nПредметы из {game} успешно полученны, обрабатываем их... \n", log_delimiter)
+
+        try:
+            drop_preview_elements = market_block.find_elements(By.TAG_NAME, 'button')
+        except:
+            print(f'\nНе нашли предметов из {game} :( \n', log_delimiter)
+            return []
+
+        self.items_total_count += len(drop_preview_elements)
+
+        print(f"\nКоличество предметов из {game}", self.items_total_count, '\n', log_delimiter)
+
+        items = self.process_csrun_items(drop_preview_elements, log_delimiter)
+        print(f"\nВсе предметы из {game} успешно обработаны \n", log_delimiter)
+
+        result_items = []
+
+        for item in items:
+            result_items.append(item)
+
+        return result_items
+
     def process_csrun_items(self, drop_preview_elements, log_delimiter):
         items = []
+
         for card in drop_preview_elements:
-            price_el = card.find_element(By.CLASS_NAME, 'drop-preview__price')
-            title_el = card.find_element(By.CLASS_NAME, 'drop-preview__title')
-            subtitle_el = card.find_element(By.CLASS_NAME, 'drop-preview__subtitle')
-            desc_el = card.find_element(By.CLASS_NAME, 'drop-preview__desc')
-
-            item_data = {
-                "price": price_el.text,
-                "title": title_el.text,
-                "subtitle": subtitle_el.text,
-                "wear": desc_el.text
-            }
-
+            item_data = self.get_item_data(card)
             items.append(item_data)
 
             print("Цена:", item_data["price"])
@@ -111,25 +115,55 @@ class SteamMarketScraper:
 
         return items
 
+    def get_item_data(self, card):
+        def find_element_or_empty(card, locator):
+            try:
+                element = card.find_element(*locator)
+                return element.text
+            except NoSuchElementException:
+                return ""
+
+        title_locator = (By.CSS_SELECTOR,
+                         'div.absolute.inset-x-2\.5.bottom-3.leading-tight.lg\:inset-x-4\.5.lg\:bottom-4 > div:nth-child(1)')
+        subtitle_locator = (By.CSS_SELECTOR,
+                            'div.absolute.inset-x-2\.5.bottom-3.leading-tight.lg\:inset-x-4\.5.lg\:bottom-4 > div:nth-child(2)')
+        wear_locator = (By.CLASS_NAME, 'rounded-sm')
+        price_locator = (By.CLASS_NAME, 'font-bold')
+
+        title = find_element_or_empty(card, title_locator)
+        subtitle = find_element_or_empty(card, subtitle_locator)
+        wear = find_element_or_empty(card, wear_locator)
+        price = find_element_or_empty(card, price_locator)
+
+        return {
+            "price": price,
+            "title": title,
+            "subtitle": subtitle,
+            "wear": wear
+        }
+
     def check_majority(self, driver):
         switch_label = driver.find_element(By.CSS_SELECTOR, 'label.agree-switcher')
         switch_label.click()
 
-    def set_needed_price(self, driver, min_price, max_price):
-        min_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[0]
-        max_price_input = driver.find_elements(By.ID, 'market-filter-minPrice')[1]
-        min_price_input.clear()
+    def set_needed_price(self, driver, max_price):
+        max_price_input = driver.find_element(By.CSS_SELECTOR, 'input[placeholder="Макс. цена"]')
         max_price_input.clear()
-        min_price_input.send_keys(min_price)
         max_price_input.send_keys(max_price)
 
-    def load_all_items(self, driver):
+    def load_all_items(self, driver, block):
         while True:
             try:
-                load_more_btn = WebDriverWait(driver, 1).until(
-                    ec.visibility_of_element_located((By.CSS_SELECTOR, '.load-more')))
-                load_more_btn.click()
+                old_height = block.get_attribute("scrollHeight")
+
+                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight;", block)
+
                 time.sleep(1)
+
+                new_height = block.get_attribute("scrollHeight")
+
+                if new_height == old_height:
+                    break
             except:
                 break
 
@@ -143,7 +177,6 @@ class SteamMarketScraper:
         self.setTopPrices()
 
     def setTopPrices(self):
-
         with open("result.txt", "w", encoding='utf-8') as file:
             file.write('Предметы из CS:GO:\n')
             self.write_top_prices_in_file(file, 'csgo')
@@ -175,7 +208,6 @@ class SteamMarketScraper:
                 response = requests.get(url)
                 if response.status_code == 200:
                     data = response.json()
-
                     try:
                         run_price = float(item['price'].replace('$', ''))
                         steam_price = float(data['lowest_price'].replace('$', ''))
@@ -249,9 +281,8 @@ class SteamMarketScraper:
         return key
 
 
-min_price = input("Минимальная сумма: ")
 max_price = input("Максимальная сумма: ")
 
 steamScrapper = SteamMarketScraper()
 
-steamScrapper.init(min_price, max_price)
+steamScrapper.init(max_price)
