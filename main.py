@@ -1,8 +1,6 @@
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as ec
 
 import os
 import time
@@ -28,7 +26,7 @@ class SteamMarketScraper:
             'BS'
         }
 
-        self.wears_english = {
+        self.wears_full_name = {
             'FN': 'Factory New',
             'MW': 'Minimal Wear',
             'FT': 'Field-Tested',
@@ -43,27 +41,24 @@ class SteamMarketScraper:
 
         driver = webdriver.Chrome()
         driver.get('https://csgo5.run/profile/inventory')
-        # wait = WebDriverWait(driver, 3)
         self.set_needed_price(driver, max_price)
         time.sleep(1)
         log_delimiter = '____________________________'
 
-        games_block = driver.find_element(By.CSS_SELECTOR,
-                                          '#market > div.contents.w-full.shrink-0.flex-col.pt-1.lg\:flex.lg\:h-full.lg\:w-67\.5.lg\:pb-5 > div.order-2.flex.gap-1\.5.lg\:flex-col')
+        games_block = driver.find_element(By.CSS_SELECTOR, '#market > div.contents.w-full.shrink-0.flex-col.pt-1.lg\:flex.lg\:h-full.lg\:w-67\.5.lg\:pb-5 > div.order-2.flex.gap-1\.5.lg\:flex-col')
 
         dota_btn = games_block.find_element(By.XPATH, './*')
         rust_btn = games_block.find_element(By.XPATH, './child::*[3]')
 
-        market = driver.find_element(By.CSS_SELECTOR,
-                                     '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
+        market = driver.find_element(By.CSS_SELECTOR, '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
 
-        csgo_items = self.getAllGameItems(driver, market, 'csgo', min_price, log_delimiter)
+        csgo_items = self.get_all_game_items(driver, market, 'csgo', min_price, log_delimiter)
         dota_btn.click()
         time.sleep(1)
-        dota_items = self.getAllGameItems(driver, market, 'dota', min_price, log_delimiter)
+        dota_items = self.get_all_game_items(driver, market, 'dota', min_price, log_delimiter)
         rust_btn.click()
         time.sleep(1)
-        rust_items = self.getAllGameItems(driver, market, 'rust', min_price, log_delimiter)
+        rust_items = self.get_all_game_items(driver, market, 'rust', min_price, log_delimiter)
 
         driver.quit()
 
@@ -75,8 +70,9 @@ class SteamMarketScraper:
 
         self.start_looking_items_in_steam_market(csgo_items, 'csgo')
         self.start_looking_items_in_steam_market(dota_items, 'dota')
+        self.start_looking_items_in_steam_market(rust_items, 'rust')
 
-    def getAllGameItems(self, driver, market_block, game, min_price, log_delimiter):
+    def get_all_game_items(self, driver, market_block, game, min_price, log_delimiter):
         print(f"\nПолучаем {game} предметы с рынка...")
 
         self.load_all_items(driver, market_block, min_price)
@@ -169,7 +165,6 @@ class SteamMarketScraper:
                 if new_height == old_height:
                     break
 
-                # Проверяем, что не листаем ниже заданной минимальной цены
                 last_item = block.find_elements(By.TAG_NAME, 'button')[-1]
                 item_data = self.get_item_data(last_item)
                 if item_data["price"] is not None:
@@ -186,9 +181,9 @@ class SteamMarketScraper:
             self.top_prices[self.items_game].pop()
 
         self.top_prices[self.items_game].sort(key=lambda x: x['difference_in_percents'], reverse=True)
-        self.setTopPrices()
+        self.set_top_prices()
 
-    def setTopPrices(self):
+    def set_top_prices(self):
         with open("result.txt", "w", encoding='utf-8') as file:
             file.write('Предметы из CS:GO:\n')
             self.write_top_prices_in_file(file, 'csgo')
@@ -215,7 +210,7 @@ class SteamMarketScraper:
 
         for item in items:
             attempts_to_get_item_data = 0
-            url = self.getItemUrl(item, items_game)
+            url = self.get_item_url(item, items_game)
             while True:
                 response = requests.get(url)
                 if response.status_code == 200:
@@ -226,9 +221,9 @@ class SteamMarketScraper:
                         difference_in_percents = round(((steam_price - run_price) / run_price) * 100, 1)
                         price_info = f'Цены: {run_price} $ => {steam_price} $ | {difference_in_percents}%'
 
-                        self.logChekingSuccess(item, items_game, price_info)
+                        self.log_checking_success(item, items_game, price_info)
 
-                        result_item_key = self.getResoultItemKey(item)
+                        result_item_key = self.get_result_item_key(item)
 
                         self.update_top_prices({
                             'name': result_item_key,
@@ -248,7 +243,7 @@ class SteamMarketScraper:
                         else:
                             break
                 elif response.status_code == 429:
-                    self.logCheckingError429(response.status_code, url)
+                    self.log_checking_error_429(response.status_code, url)
                     time.sleep(60)
                 else:
                     print(f"Ошибка запроса: {response.status_code} для предмета: \n {url}")
@@ -259,12 +254,12 @@ class SteamMarketScraper:
             self.total_iterations += 1
             print(f"Предметов обработанно: {self.total_iterations} / {self.items_total_count} \n")
 
-    def getItemUrl(self, item, items_game):
+    def get_item_url(self, item, items_game):
         url = ''
         if items_game == 'csgo':
             if item['wear'] in self.wears:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
-                      f"{item['subtitle']} ({self.wears_english[item['wear']]})"
+                      f"{item['subtitle']} ({self.wears_full_name[item['wear']]})"
             else:
                 url = f"https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market_hash_name={item['title']} | " \
                       f"{item['subtitle']}"
@@ -273,7 +268,7 @@ class SteamMarketScraper:
                   f"&market_hash_name={item['title']}"
         return url
 
-    def logChekingSuccess(self, item, items_game, price):
+    def log_checking_success(self, item, items_game, price):
         if items_game == 'dota':
             print(item['title'])
             print(price, '\n')
@@ -283,11 +278,11 @@ class SteamMarketScraper:
                   f'({item["wear"]})' if item['wear'] in self.wears else '')
             print(price, '\n')
 
-    def logCheckingError429(self, status_code, url):
+    def log_checking_error_429(self, status_code, url):
         print(f"Ошибка запроса: {status_code} \n {url}")
         print("Получен код ошибки 429. Ждём минутку и продолжаем кошмарить сервер ^) \n")
 
-    def getResoultItemKey(self, item):
+    def get_result_item_key(self, item):
         key = f"{item['title']}"
         key += f"{' | ' + item['subtitle'] if item['subtitle'] != '' else ''}"
         return key
