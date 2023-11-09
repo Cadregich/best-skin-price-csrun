@@ -36,7 +36,8 @@ class SteamMarketScraper:
             'BS': 'Battle-Scarred'
         }
 
-    def init(self, max_price):
+    def init(self, max_price, min_price):
+        min_price = float(min_price)
         chrome_driver_path = './chromedriver.exe'
         os.environ['PATH'] += ';' + os.path.dirname(os.path.abspath(chrome_driver_path))
 
@@ -53,15 +54,16 @@ class SteamMarketScraper:
         dota_btn = games_block.find_element(By.XPATH, './*')
         rust_btn = games_block.find_element(By.XPATH, './child::*[3]')
 
-        market = driver.find_element(By.CSS_SELECTOR, '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
+        market = driver.find_element(By.CSS_SELECTOR,
+                                     '#market > div.group.relative.order-5.-mx-2\.5.flex.flex-col.overflow-hidden.lg\:-mr-5.lg\:ml-0.lg\:rounded-br-3xl > div.place-content-top.grid.grid-cols-3.gap-1\.5.overflow-auto.overscroll-contain.px-2\.5.py-3.scrollbar-mb-3.scrollbar-mt-3.sm\:grid-fill-28.lg\:mr-2\.25.lg\:grid-cols-6.lg\:pb-5.lg\:pl-0.lg\:pr-2\.75.lg\:scrollbar-mb-5')
 
-        csgo_items = self.getAllGameItems(driver, market, 'csgo', log_delimiter)
+        csgo_items = self.getAllGameItems(driver, market, 'csgo', min_price, log_delimiter)
         dota_btn.click()
         time.sleep(1)
-        dota_items = self.getAllGameItems(driver, market, 'dota', log_delimiter)
+        dota_items = self.getAllGameItems(driver, market, 'dota', min_price, log_delimiter)
         rust_btn.click()
         time.sleep(1)
-        rust_items = self.getAllGameItems(driver, market, 'rust', log_delimiter)
+        rust_items = self.getAllGameItems(driver, market, 'rust', min_price, log_delimiter)
 
         driver.quit()
 
@@ -74,12 +76,12 @@ class SteamMarketScraper:
         self.start_looking_items_in_steam_market(csgo_items, 'csgo')
         self.start_looking_items_in_steam_market(dota_items, 'dota')
 
-    def getAllGameItems(self, driver, market_block, game, log_delimiter):
-        print(f"\nПолучаем {game} предметы с рана...")
+    def getAllGameItems(self, driver, market_block, game, min_price, log_delimiter):
+        print(f"\nПолучаем {game} предметы с рынка...")
 
-        self.load_all_items(driver, market_block)
+        self.load_all_items(driver, market_block, min_price)
 
-        print(f"\nПредметы из {game} успешно полученны, обрабатываем их... \n", log_delimiter)
+        print(f"\nПредметы из {game} успешно получены, обрабатываем их... \n", log_delimiter)
 
         try:
             drop_preview_elements = market_block.find_elements(By.TAG_NAME, 'button')
@@ -87,33 +89,35 @@ class SteamMarketScraper:
             print(f'\nНе нашли предметов из {game} :( \n', log_delimiter)
             return []
 
-        self.items_total_count += len(drop_preview_elements)
+        self.items_total_count = len(drop_preview_elements)
 
         print(f"\nКоличество предметов из {game}", self.items_total_count, '\n', log_delimiter)
 
-        items = self.process_csrun_items(drop_preview_elements, log_delimiter)
-        print(f"\nВсе предметы из {game} успешно обработаны \n", log_delimiter)
-
         result_items = []
 
-        for item in items:
-            result_items.append(item)
+        for item in drop_preview_elements:
+            process_result = self.process_csrun_item(item, min_price, log_delimiter)
+            if process_result != 'done':
+                result_items.append(self.process_csrun_item(item, min_price, log_delimiter))
+
+        print(f"\nВсе предметы из {game} успешно обработаны \n", log_delimiter)
 
         return result_items
 
-    def process_csrun_items(self, drop_preview_elements, log_delimiter):
-        items = []
+    def process_csrun_item(self, card, min_price, log_delimiter):
+        item_data = self.get_item_data(card)
+        if item_data["price"] is not None:
+            price = float(item_data["price"].replace('$', '').strip())
 
-        for card in drop_preview_elements:
-            item_data = self.get_item_data(card)
-            items.append(item_data)
+            if price < min_price:
+                return 'done'
 
-            print("Цена:", item_data["price"])
-            print("Название:", item_data["title"])
-            print("Износ:", item_data["wear"])
-            print(log_delimiter)
+        print("Цена:", item_data["price"])
+        print("Название:", item_data["title"])
+        print("Износ:", item_data["wear"])
+        print(log_delimiter)
 
-        return items
+        return item_data
 
     def get_item_data(self, card):
         def find_element_or_empty(card, locator):
@@ -151,7 +155,7 @@ class SteamMarketScraper:
         max_price_input.clear()
         max_price_input.send_keys(max_price)
 
-    def load_all_items(self, driver, block):
+    def load_all_items(self, driver, block, min_price):
         while True:
             try:
                 old_height = block.get_attribute("scrollHeight")
@@ -164,6 +168,14 @@ class SteamMarketScraper:
 
                 if new_height == old_height:
                     break
+
+                # Проверяем, что не листаем ниже заданной минимальной цены
+                last_item = block.find_elements(By.TAG_NAME, 'button')[-1]
+                item_data = self.get_item_data(last_item)
+                if item_data["price"] is not None:
+                    price = float(item_data["price"].replace('$', '').strip())
+                    if price < min_price:
+                        break
             except:
                 break
 
@@ -282,7 +294,8 @@ class SteamMarketScraper:
 
 
 max_price = input("Максимальная сумма: ")
+min_price = input("Минимальная сумма: ")
 
 steamScrapper = SteamMarketScraper()
 
-steamScrapper.init(max_price)
+steamScrapper.init(max_price, min_price)
